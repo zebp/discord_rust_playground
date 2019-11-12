@@ -29,14 +29,14 @@ impl fmt::Display for RustChannel {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ExecutionResponse {
+struct ExecutionResponse {
     pub success: bool,
     pub stdout: String,
     pub stderr: String,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ShareResponse {
+struct ShareResponse {
     pub id: String,
     pub url: String,
 }
