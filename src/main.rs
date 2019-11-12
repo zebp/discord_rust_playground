@@ -3,10 +3,11 @@ mod playground;
 use std::env;
 
 use serenity::{
-    model::channel::Message,
+    model::{channel::Message, id::ChannelId},
     prelude::*,
 };
 use dotenv::dotenv;
+use thiserror::Error;
 
 use playground::PlaygroundTask;
 
@@ -19,14 +20,29 @@ impl EventHandler for Handler {
             None => return
         };
 
-        message.channel_id.say(&ctx.http, "Creating share link...").unwrap();
-        message.channel_id.say(&ctx.http, task.create_share_link().unwrap()).unwrap();
-
-        message.channel_id.say(&ctx.http, "Executing...").unwrap();
-
-        let response = task.execute().unwrap();
-        message.channel_id.say(&ctx.http, response.to_string()).unwrap();
+        if let Err(error) = send_task_messages(task, &message.channel_id, &ctx) {
+            message.channel_id.say(&ctx.http, "Error evaluating code.");
+        }
     }
+}
+
+#[derive(Debug, Error)]
+enum TaskMessageError {
+    #[error("http request error")]
+    RequestError(#[from] reqwest::Error),
+    #[error("discord message")]
+    DiscordError(#[from] serenity::Error)
+}
+
+fn send_task_messages(task: PlaygroundTask, channel: &ChannelId, ctx: &Context) -> Result<(), TaskMessageError> {
+    channel.say(&ctx.http, "Creating share link...")?;
+    channel.say(&ctx.http, task.create_share_link()?)?;
+
+    channel.say(&ctx.http, "Executing...")?;
+    let response = task.execute()?;
+    channel.say(&ctx.http, response.to_string())?;
+
+    Ok(())
 }
 
 fn main() {
