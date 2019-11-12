@@ -14,7 +14,18 @@ struct Handler;
 
 impl EventHandler for Handler {
     fn message(&self, ctx: Context, message: Message) {
-        
+        let task = match PlaygroundTask::from_message(&message) {
+            Some(task) => task,
+            None => return
+        };
+
+        message.channel_id.say(&ctx.http, "Creating share link...").unwrap();
+        message.channel_id.say(&ctx.http, task.create_share_link().unwrap()).unwrap();
+
+        message.channel_id.say(&ctx.http, "Executing...").unwrap();
+
+        let response = task.execute().unwrap();
+        message.channel_id.say(&ctx.http, response.to_string()).unwrap();
     }
 }
 

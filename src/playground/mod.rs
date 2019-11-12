@@ -30,11 +30,28 @@ impl fmt::Display for RustChannel {
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct ExecutionResponse {
+#[derive(Clone, Debug, Deserialize)]
+pub struct ExecutionResponse {
     pub success: bool,
     pub stdout: String,
     pub stderr: String,
+}
+
+impl ToString for ExecutionResponse {
+
+    fn to_string(&self) -> String {
+        let mut cloned = self.clone();
+
+        cloned.stdout.truncate(900);
+        cloned.stderr.truncate(900);
+
+        if (&cloned.stdout).is_empty() {
+            format!("**Stderr** ```\n{}\n```", cloned.stderr)
+        } else {
+            format!("**Stdout** ```\n{}\n```**Stderr** ```\n{}\n```", cloned.stdout, cloned.stderr)
+        }
+    }
+    
 }
 
 #[derive(Debug, Deserialize)]
@@ -72,15 +89,15 @@ impl PlaygroundTask {
         PlaygroundTask {
             mode: "debug", // TODO: Maybe make a release option?
             edition: "2018",
-            crate_type: crate_type,
             backtrace: false,
+            crate_type,
             channel,
             code,
             tests,
         }
     }
 
-    pub fn execute(&self) -> Result<(String, String), reqwest::Error> {
+    pub fn execute(&self) -> Result<ExecutionResponse, reqwest::Error> {
         let client = Client::new();
 
         let response = client
@@ -88,9 +105,7 @@ impl PlaygroundTask {
             .json(self)
             .send()?;
 
-        let execution_response: ExecutionResponse = response.json()?;
-
-        Ok((execution_response.stdout, execution_response.stderr))
+        response.json()
     }
 
    pub fn create_share_link(&self) -> Result<String, reqwest::Error> {
@@ -119,9 +134,9 @@ mod tests {
         let code = String::from("fn main() {\n\tprintln!(\"Hello, world!\");\n}");
 
         let task = PlaygroundTask::new(code, channel);
-        let (stdout, _stderr) = task.execute().unwrap();
+        let response = task.execute().unwrap();
 
-        assert_eq!(stdout, "Hello, world!\n");
+        assert_eq!(response.stdout, "Hello, world!\n");
     }
 
     #[test]
@@ -130,9 +145,9 @@ mod tests {
         let code = String::from("#[test]\nfn it_works() {\n\tassert!(true)\n}");
 
         let task = PlaygroundTask::new(code, channel);
-        let (stdout, _stderr) = task.execute().unwrap();
+        let response = task.execute().unwrap();
 
-        assert_eq!(stdout, include_str!("remote_test_result.txt"));
+        assert_eq!(response.stdout, include_str!("remote_test_result.txt"));
     }
 
     #[test]
