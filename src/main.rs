@@ -50,10 +50,17 @@ fn send_task_messages(
     channel.send_message(&ctx.http, |m| {
         m.embed(|e| {
             e.title("Rust Playground")
-                .description(format!("Here is the code on the [Rust playground]({}).", share_link))
-                .color((222, 165, 132))
-                .field("Stdout", format!("```{}```", response.stdout), false)
-                .field("Stderr", format!("```{}```", response.stderr), false)
+                .description(format!(
+                    "Here is the code on the [Rust playground]({}).",
+                    share_link
+                ))
+                .color((222, 165, 132));
+
+            if !(&response.stdout).is_empty() {
+                e.field("Stdout", format!("```{}```", response.stdout), false);
+            }
+
+            e.field("Stderr", format!("```{}```", response.stderr), false)
         })
     })?;
 
