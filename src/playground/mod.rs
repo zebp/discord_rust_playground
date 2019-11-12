@@ -1,9 +1,9 @@
 use std::fmt;
 
 use regex::Regex;
-use serde_json::json;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use serenity::model::channel::Message;
 
 #[derive(Debug, Serialize)]
@@ -37,23 +37,6 @@ pub struct ExecutionResponse {
     pub stderr: String,
 }
 
-impl ToString for ExecutionResponse {
-
-    fn to_string(&self) -> String {
-        let mut cloned = self.clone();
-
-        cloned.stdout.truncate(900);
-        cloned.stderr.truncate(900);
-
-        if (&cloned.stdout).is_empty() {
-            format!("**Stderr** ```\n{}\n```", cloned.stderr)
-        } else {
-            format!("**Stdout** ```\n{}\n```**Stderr** ```\n{}\n```", cloned.stdout, cloned.stderr)
-        }
-    }
-    
-}
-
 #[derive(Debug, Deserialize)]
 struct ShareResponse {
     pub id: String,
@@ -74,7 +57,7 @@ pub struct PlaygroundTask {
 
 impl PlaygroundTask {
     pub fn from_message(message: &Message) -> Option<Self> {
-        let regex = Regex::new("<@643827675894513696>\\s```rust\\n((.*|\\n)*)```").unwrap(); // TODO: Make this a constant
+        let regex = Regex::new("!compile\\s```rust\\n((.*|\\n)*)```").unwrap(); // TODO: Make this a constant
 
         let captures = regex.captures(&message.content)?;
         let code = captures.get(1)?.as_str();
@@ -108,7 +91,7 @@ impl PlaygroundTask {
         response.json()
     }
 
-   pub fn create_share_link(&self) -> Result<String, reqwest::Error> {
+    pub fn create_share_link(&self) -> Result<String, reqwest::Error> {
         let client = Client::new();
 
         let share_response: ShareResponse = client

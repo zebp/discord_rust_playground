@@ -2,11 +2,11 @@ mod playground;
 
 use std::env;
 
+use dotenv::dotenv;
 use serenity::{
     model::{channel::Message, id::ChannelId},
     prelude::*,
 };
-use dotenv::dotenv;
 use thiserror::Error;
 
 use playground::PlaygroundTask;
@@ -17,11 +17,14 @@ impl EventHandler for Handler {
     fn message(&self, ctx: Context, message: Message) {
         let task = match PlaygroundTask::from_message(&message) {
             Some(task) => task,
-            None => return
+            None => return,
         };
 
-        if let Err(error) = send_task_messages(task, &message.channel_id, &ctx) {
-            message.channel_id.say(&ctx.http, "Error evaluating code.");
+        if let Err(_) = send_task_messages(task, &message.channel_id, &ctx) {
+            message
+                .channel_id
+                .say(&ctx.http, "Error evaluating code.")
+                .expect("could not send an error message to discord");
         }
     }
 }
@@ -31,16 +34,28 @@ enum TaskMessageError {
     #[error("http request error")]
     RequestError(#[from] reqwest::Error),
     #[error("discord message")]
-    DiscordError(#[from] serenity::Error)
+    DiscordError(#[from] serenity::Error),
 }
 
-fn send_task_messages(task: PlaygroundTask, channel: &ChannelId, ctx: &Context) -> Result<(), TaskMessageError> {
-    channel.say(&ctx.http, "Creating share link...")?;
-    channel.say(&ctx.http, task.create_share_link()?)?;
-
+fn send_task_messages(
+    task: PlaygroundTask,
+    channel: &ChannelId,
+    ctx: &Context,
+) -> Result<(), TaskMessageError> {
     channel.say(&ctx.http, "Executing...")?;
+
+    let share_link = task.create_share_link()?;
     let response = task.execute()?;
-    channel.say(&ctx.http, response.to_string())?;
+
+    channel.send_message(&ctx.http, |m| {
+        m.embed(|e| {
+            e.title("Rust Playground")
+                .description(format!("Here is the code on the [Rust playground]({}).", share_link))
+                .color((222, 165, 132))
+                .field("Stdout", format!("```{}```", response.stdout), false)
+                .field("Stderr", format!("```{}```", response.stderr), false)
+        })
+    })?;
 
     Ok(())
 }
