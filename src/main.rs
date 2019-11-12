@@ -45,7 +45,11 @@ fn send_task_messages(
     channel.say(&ctx.http, "Executing...")?;
 
     let share_link = task.create_share_link()?;
-    let response = task.execute()?;
+    let mut response = task.execute()?;
+
+    // Make sure the message is never too long
+    response.stdout.truncate(900);
+    response.stderr.truncate(900);
 
     channel.send_message(&ctx.http, |m| {
         m.embed(|e| {
