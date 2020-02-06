@@ -60,11 +60,11 @@ fn send_task_messages(
                 ))
                 .color((222, 165, 132));
 
-            if !(&response.stdout).is_empty() {
-                e.field("Stdout", format!("```{}```", response.stdout), false);
+            if !response.stdout.is_empty() {
+                e.field("Stdout", format!("```\n{}```", response.stdout), false);
             }
 
-            e.field("Stderr", format!("```{}```", response.stderr), false)
+            e.field("Stderr", format!("```\n{}```", response.stderr), false)
         })
     })?;
 
