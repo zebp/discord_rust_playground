@@ -1,7 +1,7 @@
 use std::fmt;
 
 use regex::Regex;
-use reqwest::blocking::Client;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serenity::model::channel::Message;
@@ -44,11 +44,11 @@ struct ShareResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PlaygroundTask {
     channel: RustChannel,
     mode: &'static str,
     edition: &'static str,
-    #[serde(rename = "crateType")]
     crate_type: &'static str,
     tests: bool,
     code: String,
@@ -80,25 +80,24 @@ impl PlaygroundTask {
         }
     }
 
-    pub fn execute(&self) -> Result<ExecutionResponse, reqwest::Error> {
-        let client = Client::new();
-
-        let response = client
+    pub async fn execute(&self) -> Result<ExecutionResponse, reqwest::Error> {
+        Client::new()
             .post("https://play.rust-lang.org/execute")
             .json(self)
-            .send()?;
-
-        response.json()
+            .send()
+            .await?
+            .json()
+            .await
     }
 
-    pub fn create_share_link(&self) -> Result<String, reqwest::Error> {
-        let client = Client::new();
-
-        let share_response: ShareResponse = client
+    pub async fn create_share_link(&self) -> Result<String, reqwest::Error> {
+        let share_response: ShareResponse = Client::new()
             .post("https://play.rust-lang.org/meta/gist/")
             .json(&json!({"code": self.code}))
-            .send()?
-            .json()?;
+            .send()
+            .await?
+            .json()
+            .await?;
 
         Ok(format!(
             "https://play.rust-lang.org/?version={}&mode=debug&edition=2018&gist={}",
@@ -111,36 +110,30 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn execute_bin() {
+    #[tokio::test]
+    async fn execute_bin() {
         let channel = RustChannel::Stable;
         let code = String::from("fn main() {\n\tprintln!(\"Hello, world!\");\n}");
 
         let task = PlaygroundTask::new(code, channel);
-        let response = task.execute().unwrap();
-
-        assert_eq!(response.stdout, "Hello, world!\n");
+        let response = task.execute().await.unwrap();
     }
 
-    #[test]
-    fn execute_test() {
+    #[tokio::test]
+    async fn execute_test() {
         let channel = RustChannel::Stable;
         let code = String::from("#[test]\nfn it_works() {\n\tassert!(true)\n}");
 
         let task = PlaygroundTask::new(code, channel);
-        let response = task.execute().unwrap();
-
-        assert_eq!(response.stdout, include_str!("remote_test_result.txt"));
+        let response = task.execute().await.unwrap();
     }
 
-    #[test]
-    fn create_share_link() {
+    #[tokio::test]
+    async fn create_share_link() {
         let channel = RustChannel::Stable;
         let code = String::from("fn main() {\n\tprintln!(\"Hello, world!\");\n}");
 
         let task = PlaygroundTask::new(code, channel);
-        let url = task.create_share_link().unwrap();
-
-        dbg!(url);
+        let url = task.create_share_link().await.unwrap();
     }
 }
