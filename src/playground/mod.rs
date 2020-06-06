@@ -1,10 +1,8 @@
-use std::fmt;
+use std::{fmt, str::FromStr};
 
-use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use serenity::model::channel::Message;
 
 #[derive(Debug, Serialize)]
 pub enum RustChannel {
@@ -30,6 +28,21 @@ impl fmt::Display for RustChannel {
     }
 }
 
+impl FromStr for RustChannel {
+    // We don't really care for a good error type here as we're going to use our own later.
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.to_lowercase();
+        match s.as_str() {
+            "stable" => Ok(Self::Stable),
+            "beta" => Ok(Self::Beta),
+            "nightly" => Ok(Self::Nightly),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct ExecutionResponse {
     pub success: bool,
@@ -43,40 +56,35 @@ struct ShareResponse {
     pub url: String,
 }
 
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum CrateType {
+    Lib,
+    Bin,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaygroundTask {
     channel: RustChannel,
     mode: &'static str,
     edition: &'static str,
-    crate_type: &'static str,
+    crate_type: CrateType,
     tests: bool,
     code: String,
     backtrace: bool,
 }
 
 impl PlaygroundTask {
-    pub fn from_message(message: &Message) -> Option<Self> {
-        let regex = Regex::new("!compile\\s```rust\\n((.*|\\n)*)```").unwrap(); // TODO: Make this a constant
-
-        let captures = regex.captures(&message.content)?;
-        let code = captures.get(1)?.as_str();
-
-        Some(Self::new(String::from(code), RustChannel::Stable)) // TODO: Make a way to specify the channel
-    }
-
-    fn new(code: String, channel: RustChannel) -> Self {
-        let tests = code.contains("#[test]"); // TODO: Make this detection smarter
-        let crate_type = if tests { "lib" } else { "bin" };
-
+    pub fn new(code: String, channel: RustChannel, crate_type: CrateType) -> Self {
         PlaygroundTask {
             mode: "debug", // TODO: Maybe make a release option?
             edition: "2018",
             backtrace: false,
+            tests: crate_type == CrateType::Lib,
             crate_type,
             channel,
             code,
-            tests,
         }
     }
 
@@ -108,32 +116,40 @@ impl PlaygroundTask {
 
 mod tests {
 
-    use super::*;
-
     #[tokio::test]
     async fn execute_bin() {
+        use super::*;
+
         let channel = RustChannel::Stable;
         let code = String::from("fn main() {\n\tprintln!(\"Hello, world!\");\n}");
 
-        let task = PlaygroundTask::new(code, channel);
+        let task = PlaygroundTask::new(code, channel, CrateType::Bin);
         let response = task.execute().await.unwrap();
+
+        assert!(response.stdout.contains("Hello, world!"));
     }
 
     #[tokio::test]
     async fn execute_test() {
+        use super::*;
+
         let channel = RustChannel::Stable;
         let code = String::from("#[test]\nfn it_works() {\n\tassert!(true)\n}");
 
-        let task = PlaygroundTask::new(code, channel);
+        let task = PlaygroundTask::new(code, channel, CrateType::Lib);
         let response = task.execute().await.unwrap();
+
+        assert!(response.stdout.contains("1 passed"));
     }
 
     #[tokio::test]
     async fn create_share_link() {
+        use super::*;
+
         let channel = RustChannel::Stable;
         let code = String::from("fn main() {\n\tprintln!(\"Hello, world!\");\n}");
 
-        let task = PlaygroundTask::new(code, channel);
-        let url = task.create_share_link().await.unwrap();
+        let task = PlaygroundTask::new(code, channel, CrateType::Bin);
+        task.create_share_link().await.unwrap();
     }
 }
