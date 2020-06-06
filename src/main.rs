@@ -6,7 +6,7 @@ use dotenv::dotenv;
 use serenity::{
     framework::{
         standard::{
-            macros::{command, group},
+            macros::{command, group, hook},
             Args, CommandResult,
         },
         StandardFramework,
@@ -21,15 +21,15 @@ use regex::Regex;
 
 #[derive(Debug, Error)]
 enum TaskMessageError {
-    #[error("http request error")]
+    #[error("Http request error")]
     RequestError(#[from] reqwest::Error),
-    #[error("discord message")]
+    #[error("Error while sending discord message")]
     DiscordError(#[from] serenity::Error),
-    #[error("no code provided")]
+    #[error("No code provided")]
     NoCode,
-    #[error("no code provided")]
+    #[error("No code provided")]
     InvalidCodeFormat,
-    #[error("provided rust channel does not exist, please use Stable, Beta, or Nightly")]
+    #[error("Provided rust channel does not exist, please use Stable, Beta, or Nightly")]
     InvalidRustChannel,
 }
 
@@ -105,6 +105,23 @@ async fn evaluate(
     Ok(())
 }
 
+#[hook]
+async fn after(ctx: &Context, msg: &Message, _: &str, command_result: CommandResult) {
+    if let Err(error) = command_result {
+        let _ = msg
+            .channel_id
+            .send_message(&ctx.http, |m| {
+                m.embed(|e| {
+                    e.title("Rust Playground")
+                        .description("Error occured while evaluating **Rust**.")
+                        .color((255, 35, 35))
+                        .field("Message", error.0, false)
+                })
+            })
+            .await;
+    }
+}
+
 #[tokio::main]
 async fn main() {
     if let Err(_) = dotenv() {
@@ -115,7 +132,8 @@ async fn main() {
 
     let framework = StandardFramework::new()
         .configure(|c| c.with_whitespace(true).prefix("!"))
-        .group(&GENERAL_GROUP);
+        .group(&GENERAL_GROUP)
+        .after(after);
     let mut client = Client::new(&token)
         .framework(framework)
         .await
