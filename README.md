@@ -11,4 +11,4 @@ A bridge between Discord and the Rust playground.
 
 ## Screenshots
 
-![image](https://i.imgur.com/9btjfN7.png)
+![image](https://i.imgur.com/G9qpHvP.png)
