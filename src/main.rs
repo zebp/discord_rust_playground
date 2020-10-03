@@ -3,6 +3,7 @@ mod playground;
 use std::env;
 
 use dotenv::dotenv;
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use serenity::{
     framework::{
         standard::{
@@ -33,12 +34,28 @@ enum TaskMessageError {
     InvalidRustChannel,
 }
 
+
+// Serenity sucks, this is so we can data stored in our context.
+struct GlobSetKey;
+
+impl TypeMapKey for GlobSetKey {
+    type Value = GlobSet;
+}
+
 #[group]
 #[commands(rust)]
 struct General;
 
 #[command]
 async fn rust(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let type_map = ctx.data.read().await;
+    let glob_set = type_map.get::<GlobSetKey>().expect("no glob set for client context");
+
+    // Ensures we are in the right channel to send eval the code.
+    if !glob_set.is_match(msg.channel_id.to_string()) {
+        return Ok(())
+    }
+
     let first_arg = args.current().ok_or(TaskMessageError::NoCode)?;
     let channel = if first_arg.starts_with("```rust") {
         RustChannel::Stable
@@ -115,7 +132,7 @@ async fn after(ctx: &Context, msg: &Message, _: &str, command_result: CommandRes
                     e.title("Rust Playground")
                         .description("Error occured while evaluating **Rust**.")
                         .color((255, 35, 35))
-                        .field("Message", error.0, false)
+                        .field("Message", error.to_string(), false)
                 })
             })
             .await;
@@ -128,6 +145,18 @@ async fn main() {
         eprintln!("error loading env file, assuming DISCORD_TOKEN is already in env vars");
     }
 
+    let mut builder = GlobSetBuilder::new();
+
+    env::var("CHANNELS")
+        .expect("Expect a list of channels or wildcards")
+        .split_ascii_whitespace()
+        .map(Glob::new)
+        .for_each(|glob| {
+            let glob = glob.expect("invalid wildcard provided");
+            builder.add(glob);
+        });
+    let glob_set = builder.build().expect("unable to build glob set");
+
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
 
     let framework = StandardFramework::new()
@@ -135,6 +164,7 @@ async fn main() {
         .group(&GENERAL_GROUP)
         .after(after);
     let mut client = Client::new(&token)
+        .type_map_insert::<GlobSetKey>(glob_set)
         .framework(framework)
         .await
         .expect("unable to create discord client");
