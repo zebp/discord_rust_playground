@@ -34,7 +34,6 @@ enum TaskMessageError {
     InvalidRustChannel,
 }
 
-
 // Serenity sucks, this is so we can data stored in our context.
 struct GlobSetKey;
 
@@ -49,11 +48,13 @@ struct General;
 #[command]
 async fn rust(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let type_map = ctx.data.read().await;
-    let glob_set = type_map.get::<GlobSetKey>().expect("no glob set for client context");
+    let glob_set = type_map
+        .get::<GlobSetKey>()
+        .expect("no glob set for client context");
 
     // Ensures we are in the right channel to send eval the code.
     if !glob_set.is_match(msg.channel_id.to_string()) {
-        return Ok(())
+        return Ok(());
     }
 
     let first_arg = args.current().ok_or(TaskMessageError::NoCode)?;
@@ -100,6 +101,8 @@ async fn evaluate(
     response.stdout.truncate(900);
     response.stderr.truncate(900);
 
+    let stderr = response.get_formatted_stderr(&task);
+
     channel
         .send_message(&ctx.http, |m| {
             m.embed(|e| {
@@ -114,7 +117,11 @@ async fn evaluate(
                     e.field("Stdout", format!("```\n{}```", response.stdout), false);
                 }
 
-                e.field("Stderr", format!("```\n{}```", response.stderr), false)
+                if !stderr.is_empty() {
+                    e.field("Stderr", format!("```\n{}```", stderr), false);
+                }
+
+                e
             })
         })
         .await?;

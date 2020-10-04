@@ -50,6 +50,38 @@ pub struct ExecutionResponse {
     pub stderr: String,
 }
 
+impl ExecutionResponse {
+    /// Formats the stderr to have a cleaner output with less noise.
+    pub fn get_formatted_stderr(&self, task: &PlaygroundTask) -> String {
+        let compiled = !self
+            .stderr
+            .contains("error: aborting due to previous error");
+
+        if !compiled {
+            return self
+                .stderr
+                .split("error: aborting due to previous error")
+                .next()
+                .unwrap()
+                .lines()
+                .skip(1)
+                .collect::<Vec<&str>>()
+                .join("\n");
+        }
+
+        if let CrateType::Lib = task.crate_type {
+            return self.stderr.clone();
+        }
+
+        self.stderr
+            .clone()
+            .lines()
+            .skip(3)
+            .collect::<Vec<&str>>()
+            .join("\n")
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct ShareResponse {
     pub id: String,
@@ -69,7 +101,7 @@ pub struct PlaygroundTask {
     channel: RustChannel,
     mode: &'static str,
     edition: &'static str,
-    crate_type: CrateType,
+    pub crate_type: CrateType,
     tests: bool,
     code: String,
     backtrace: bool,
