@@ -170,7 +170,7 @@ async fn main() {
         .configure(|c| c.with_whitespace(true).prefix("!"))
         .group(&GENERAL_GROUP)
         .after(after);
-    let mut client = Client::new(&token)
+    let mut client = Client::builder(token)
         .type_map_insert::<GlobSetKey>(glob_set)
         .framework(framework)
         .await
